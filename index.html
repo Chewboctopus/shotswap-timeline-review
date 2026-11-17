@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ShotSwap Timeline Review & Version Player</title>
+  <link rel="stylesheet" href="style.css?v=20261117">
+</head>
+<body>
+  <!-- Header -->
+  <header class="app-header">
+    <div class="header-left">
+      <span class="brand-badge" id="appBrandBadge">SHOTSWAP</span>
+      <h1 class="header-title" id="appHeaderTitle">Timeline Review & Version Player</h1>
+      <span class="timeline-tag" id="appTimelineTag">Conformed Cut (Handles Trimmed)</span>
+    </div>
+    <div class="header-right">
+      <span id="serverStatusText" style="font-size:11px; color:var(--text-muted); margin-right:6px; font-family:var(--font-mono);"></span>
+      <button class="btn btn-icon" id="btnToggleScanReport" title="View Version & Proxy Status Report">📊 Status Report <span id="reportAlertBadge" class="report-badge-pill" style="display:none;">0</span></button>
+      <button class="btn btn-icon" id="btnToggleProjectBar" title="Choose Resolve Project, Timeline, Base Layer Movie, and Media Source Folder">📂 Project / Media</button>
+      <button class="btn btn-icon" id="btnRescan" title="Read latest Resolve timeline (even if Resolve is closed) and scan media folder for new shot versions">🔄 Sync & Rescan</button>
+      <button class="btn btn-icon" id="btnMakeProxies" title="Generate web proxies for any new ProRes .mov renders">⚡ Build Proxies</button>
+      <button class="btn btn-icon" id="btnLoop" title="Loop Shot (L)">🔁 Loop Shot</button>
+      <select class="speed-select" id="speedSelect" title="Playback Speed">
+        <option value="0.5">0.5x</option>
+        <option value="1.0" selected>1.0x (24 fps)</option>
+        <option value="1.5">1.5x</option>
+        <option value="2.0">2.0x</option>
+      </select>
+    </div>
+  </header>
+
+  <!-- Scan & Proxy Status Report Banner / Drawer -->
+  <div class="scan-report-panel" id="scanReportPanel" style="display:none;">
+    <div class="scan-report-header">
+      <div>
+        <strong id="scanReportTitle">📊 Version & Proxy Scan Report</strong>
+        <span id="scanReportTimestamp" style="font-size:11px; color:var(--text-dim); margin-left:10px;"></span>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button class="btn btn-xs btn-primary" id="btnReportBuildProxies" style="display:none;">⚡ Build Missing Proxies Now</button>
+        <button class="btn btn-xs" id="btnCloseScanReport">✕ Close</button>
+      </div>
+    </div>
+    <div class="scan-report-grid" id="scanReportBody">
+      <!-- Populated dynamically by app.js -->
+    </div>
+  </div>
+
+  <!-- Resolve Project / Timeline / Media Source / Base Layer Selector Bar -->
+  <div class="project-config-bar" id="projectConfigBar" style="display:none;">
+    <div class="config-field">
+      <label class="meta-label">RESOLVE PROJECT (READS DB WHEN CLOSED):</label>
+      <div style="display:flex; gap:4px;">
+        <select class="config-select" id="selResolveProject">
+          <option value="">Loading Resolve projects...</option>
+        </select>
+        <button class="btn btn-xs" id="btnBrowseResolveDB" title="Browse for a Resolve Project.db file anywhere on disk">📁 DB...</button>
+      </div>
+    </div>
+    <div class="config-field">
+      <label class="meta-label">TIMELINE:</label>
+      <select class="config-select" id="selResolveTimeline">
+        <option value="">Loading timelines...</option>
+      </select>
+    </div>
+    <div class="config-field">
+      <label class="meta-label">MEDIA SOURCE ROOT (SHOT FOLDERS):</label>
+      <div style="display:flex; gap:4px;">
+        <input type="text" class="config-input" id="inpMediaSource" value="" placeholder="Path to shot media root" style="min-width:170px;">
+        <button class="btn btn-xs" id="btnBrowseMediaSource" title="Open Folder Picker Dialog for Media Source">📁 Browse...</button>
+      </div>
+    </div>
+    <div class="config-actions">
+      <button class="btn btn-primary btn-xs" id="btnLoadSelectedTimeline" style="padding:6px 12px;" title="Switch to selected Project & Timeline">🚀 Load Timeline</button>
+      <button class="btn btn-xs" id="btnLoadAndFullScan" style="padding:6px 10px;" title="Load Timeline and perform full disk scan of Media Source folder">🔍 Load + Full Scan</button>
+    </div>
+
+    <div style="width:100%; border-top:1px solid var(--border-color); margin:2px 0;"></div>
+
+    <div class="config-field" style="flex:1; min-width:300px;">
+      <label class="meta-label">BASE LAYER MIXDOWN MOVIE (AUDIO + GREENSCREEN / PREV CUT FOR A/B COMPARE):</label>
+      <div style="display:flex; gap:6px; align-items:center;">
+        <select class="config-select" id="selBaseMovie" style="flex:1;">
+          <option value="">-- Select Reference / Mixdown Movie (or Browse) --</option>
+        </select>
+        <button class="btn btn-xs" id="btnBrowseBaseMovie" title="Open File Dialog to pick any Base Layer / Mixdown movie (.mov / .mp4)">🎬 Browse Movie...</button>
+      </div>
+    </div>
+    <div class="config-field">
+      <label class="meta-label">BASE MOVIE START TC:</label>
+      <select class="config-select" id="selBaseStartFrame" style="min-width:165px;">
+        <option value="86208" selected>00:59:52:00 (w/ Leader)</option>
+        <option value="86400">01:00:00:00 (Picture Start)</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Main Container -->
+  <div class="main-container">
+    <!-- Video Player Section -->
+    <div class="player-section">
+      <!-- Video Stage -->
+      <div class="video-stage" id="videoStage">
+        <!-- Base Layer Reference / Audio Mixdown Player (B) -->
+        <video id="videoBase" class="video-hidden" playsinline preload="metadata"></video>
+        <!-- Secondary Shot Version Compare Player (C) -->
+        <video id="videoC" class="video-hidden" playsinline preload="metadata" muted></video>
+        <!-- Dual Ping-Pong Shot Player (A) -->
+        <video id="videoA" class="video-active" playsinline preload="auto"></video>
+        <video id="videoB" class="video-hidden" playsinline preload="metadata"></video>
+
+        <!-- Interactive Split Wipe Divider (for A|B or A|C Split Mode) -->
+        <div class="ab-wipe-line" id="abWipeLine" style="display:none;">
+          <div class="ab-wipe-knob">⇔</div>
+          <span class="ab-wipe-tag left" id="abWipeTagLeft">A: VFX</span>
+          <span class="ab-wipe-tag right" id="abWipeTagRight">B: BASE</span>
+        </div>
+
+        <!-- Overlays -->
+        <div class="player-overlay-top-left">
+          <div class="overlay-shot-code" id="overlayShotCode">SH_001_010</div>
+          <div class="overlay-version-badge" id="overlayVersion">Loading version...</div>
+        </div>
+
+        <div class="player-overlay-top-right">
+          <div class="overlay-timecode" id="overlayTimecode">01:00:00:00</div>
+          <div class="overlay-frame-info" id="overlayFrameInfo">Frame: 86400 | Shot: 1/102</div>
+        </div>
+      </div>
+
+      <!-- Transport Bar -->
+      <div class="transport-bar">
+        <div class="transport-left">
+          <button class="btn btn-icon" id="btnPrevShot" title="Previous Shot (Q / PageUp)">⏮ Shot</button>
+          <button class="btn btn-icon" id="btnStepBack10" title="Step -10 Frames (Shift+Left)">⏪ -10f</button>
+          <button class="btn btn-icon" id="btnStepBack1" title="Step -1 Frame (Left Arrow)">◀ -1f</button>
+        </div>
+
+        <div class="transport-center">
+          <button class="btn btn-play" id="btnPlay" title="Play / Pause (Spacebar)">▶ Play</button>
+          <button class="btn btn-icon" id="btnABCompare" title="Cycle A/B Base Layer Compare: A (VFX Cut) → B (Base Layer Movie) → A|B Split Wipe (Hotkey: B)">🌓 A/B: VFX (A)</button>
+          <button class="btn btn-icon" id="btnACCompare" title="Cycle A/C Version Compare: A (Active Version) → C (Compare Version) → A|C Split Wipe (Hotkey: C)">🔀 A/C: VFX (A)</button>
+          <button class="btn btn-icon" id="btnBaseAudio" title="Toggle Continuous Audio from Base Layer Movie (Hotkey: M)">🔊 Base Audio: ON</button>
+        </div>
+
+        <div class="transport-right">
+          <button class="btn btn-icon" id="btnStepFwd1" title="Step +1 Frame (Right Arrow)">+1f ▶</button>
+          <button class="btn btn-icon" id="btnStepFwd10" title="Step +10 Frames (Shift+Right)">+10f ⏩</button>
+          <button class="btn btn-icon" id="btnNextShot" title="Next Shot (W / PageDown)">Shot ⏭</button>
+        </div>
+      </div>
+
+      <!-- Timeline Track -->
+      <div class="timeline-section">
+        <div class="timeline-info-row">
+          <div class="timeline-zoom-controls">
+            <span>TIMELINE CUT</span>
+            <button class="btn btn-xs" id="btnZoomOut" title="Zoom Out (-)">➖</button>
+            <input type="range" id="timelineZoomSlider" class="zoom-slider" min="1" max="25" step="0.5" value="1" title="Timeline Zoom (Mouse Wheel over timeline)">
+            <button class="btn btn-xs" id="btnZoomIn" title="Zoom In (+)">➕</button>
+            <span class="zoom-badge" id="zoomLevelLabel">1.0x</span>
+            <button class="btn btn-xs" id="btnZoomFit" title="Fit Entire Cut (0)">Fit</button>
+          </div>
+          <span style="font-family:var(--font-mono); font-size:11px;">WHEEL / +/-: Zoom &nbsp;|&nbsp; SPACE: Play &nbsp;|&nbsp; ←/→: Frame &nbsp;|&nbsp; Q/W: Prev/Next Cut</span>
+        </div>
+        <div class="timeline-track-container" id="timelineTrack">
+          <div class="timeline-zoom-inner" id="timelineZoomInner">
+            <div class="timeline-ruler" id="timelineRuler"></div>
+            <div class="shot-strip" id="shotStrip"></div>
+            <div class="playhead-line" id="playheadLine">
+              <div class="playhead-head"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Inspector & Notes Sidebar -->
+    <aside class="inspector-sidebar">
+      <div class="sidebar-tabs">
+        <div class="sidebar-tab active" data-tab="inspector">Shot & Versions</div>
+        <div class="sidebar-tab" data-tab="notes">Notes & Markers</div>
+        <div class="sidebar-tab" data-tab="export">Export</div>
+      </div>
+
+      <div class="sidebar-content">
+        <!-- Tab 1: Shot & Version Inspector -->
+        <div id="tab-inspector" style="display:flex; flex-direction:column; gap:12px; flex:1; min-height:0;">
+          <div class="inspector-card" style="flex-shrink:0;">
+            <div class="inspector-card-title">
+              <span id="inspectorShotCode">SH_001_010</span>
+              <span class="brand-badge" id="versionCountBadge">0 versions</span>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              <label class="meta-label">SWAP ACTIVE VERSION (A) — NEWEST TO OLDEST:</label>
+              <select class="version-select" id="versionSelect"></select>
+              <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--text-muted); margin-top:2px;">
+                <span>Compare (C): <strong id="inspectorCVersionLabel" style="color:#f472b6; font-family:var(--font-mono);">--</strong></span>
+                <button class="btn btn-xs" id="btnResetCToSecond" title="Reset C to default (2nd most recent version)">↺ Default C (2nd Latest)</button>
+              </div>
+            </div>
+
+            <div class="meta-grid" style="margin-top:6px;">
+              <div class="meta-item">
+                <span class="meta-label">Cut Duration</span>
+                <span class="meta-value" id="inspectorDuration">--</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">Handles Trimmed</span>
+                <span class="meta-value" id="inspectorHandles">--</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">Timecode In</span>
+                <span class="meta-value" id="inspectorTCIn">--</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">Timecode Out</span>
+                <span class="meta-value" id="inspectorTCOut">--</span>
+              </div>
+            </div>
+
+            <!-- Internal Shot Slip / First-Frame Nudge Controls -->
+            <div style="border-top:1px solid var(--border-color); margin-top:8px; padding-top:8px; display:flex; flex-direction:column; gap:6px;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span class="meta-label" title="Nudge the internal start frame (Source In) of this clip without changing cut length">SLIP SHOT START FRAME (SOURCE IN):</span>
+                <span id="inspectorClipLength" style="font-size:10px; font-family:var(--font-mono); color:var(--text-muted);">Clip: --</span>
+              </div>
+              <div style="display:flex; gap:4px; align-items:center;">
+                <button class="btn btn-xs" id="btnSlipBack10" title="Slip Start Frame -10f (Alt+[)">-10f</button>
+                <button class="btn btn-xs" id="btnSlipBack1" title="Slip Start Frame -1f ([)">-1f</button>
+                <input type="number" id="inpSourceIn" min="0" step="1" class="config-input" style="width:62px; text-align:center; font-family:var(--font-mono); padding:3px 4px;" title="Exact Source In Frame (0 = very first frame of file, 10 = standard 10f handle)">
+                <button class="btn btn-xs" id="btnSlipFwd1" title="Slip Start Frame +1f (])">+1f</button>
+                <button class="btn btn-xs" id="btnSlipFwd10" title="Slip Start Frame +10f (Alt+])">+10f</button>
+              </div>
+              <div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap;">
+                <button class="btn btn-xs" id="btnSlipZero" title="Start at Frame 0 (no head handle, e.g. raw AI generation)">0f (Start)</button>
+                <button class="btn btn-xs" id="btnSlipTen" title="Standard 10-frame head handle">10f (Std)</button>
+                <button class="btn btn-xs" id="btnSlipMarkCurrent" title="Use the currently displayed video frame as the shot's first frame (Source In)">📍 Use Current Frame</button>
+                <button class="btn btn-xs" id="btnSlipReset" title="Reset Source In to baseline Resolve timeline value">↺ Reset</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Scrolling Version Thumbnail Browser -->
+          <div class="version-thumb-section">
+            <div class="version-thumb-header">
+              <span class="meta-label">ALL SHOT VERSIONS (CLICK TO SWAP • HOVER TO SCRUB)</span>
+            </div>
+            <div class="version-thumb-list" id="versionThumbList"></div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Notes & Markers -->
+        <div id="tab-notes" class="notes-container" style="display:none;">
+          <div class="note-input-box">
+            <label class="meta-label">ADD TIMELINE NOTE / MARKER:</label>
+            <textarea class="note-textarea" id="noteTextarea" placeholder="Type feedback or note for this shot/frame..."></textarea>
+
+            <div class="note-row-controls">
+              <div style="display:flex; gap:6px; align-items:center;">
+                <label class="meta-label">Color:</label>
+                <select class="color-select" id="noteColorSelect">
+                  <option value="Cyan" selected>Cyan</option>
+                  <option value="Blue">Blue</option>
+                  <option value="Green">Green</option>
+                  <option value="Yellow">Yellow</option>
+                  <option value="Red">Red</option>
+                  <option value="Pink">Pink</option>
+                  <option value="Purple">Purple</option>
+                  <option value="Lavender">Lavender</option>
+                  <option value="Sky">Sky</option>
+                  <option value="Mint">Mint</option>
+                  <option value="Sand">Sand</option>
+                  <option value="White">White</option>
+                </select>
+
+                <select class="color-select" id="noteScopeSelect">
+                  <option value="shot" selected>Full Shot</option>
+                  <option value="frame">This Frame</option>
+                </select>
+              </div>
+
+              <button class="btn btn-primary" id="btnAddNote">+ Add Note</button>
+            </div>
+          </div>
+
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
+            <span class="meta-label">TIMELINE NOTES</span>
+            <span class="meta-label" id="noteCountLabel">0 notes</span>
+          </div>
+
+          <div class="notes-list" id="notesList"></div>
+        </div>
+
+        <!-- Tab 3: Export Panel -->
+        <div id="tab-export" class="export-panel" style="display:none;">
+          <span class="inspector-card-title">Export Burn-In Proxy Movie</span>
+          <p style="font-size:12px; color:var(--text-muted);">
+            Render a single 1080p MP4 reference movie of the assembled cut with burned-in Shot Code, Selected Version, Source In/Slip, Timecode, Frame counters, and Base Layer audio:
+          </p>
+          <div class="export-btn-group">
+            <button class="btn btn-primary" id="btnExportBurninMovie" style="background:#0284c7;">
+              🎥 Render Proxy Cut Movie w/ Burn-Ins (.mp4)
+            </button>
+
+            <hr style="border:none; border-top:1px solid var(--border-color); margin:10px 0;">
+
+            <span class="inspector-card-title">DaVinci Resolve Timeline Update & DRT Export</span>
+            <p style="font-size:12px; color:var(--text-muted);">
+              Directly update the open Resolve timeline (places new/changed shots onto a new top video track) or export a <strong>"What's New" DRT</strong> (`.drt`) timeline file:
+            </p>
+            <button class="btn btn-primary" id="btnPushUpdatesToResolve" style="background:#7c3aed;">
+              🚀 Update Open Resolve Timeline — Place "What's New" on New Track
+            </button>
+            <button class="btn btn-primary" id="btnExportWhatsNewDRT" style="background:#4f46e5; margin-top:6px;">
+              📦 Export "What's New" DRT — Diff Only (.drt)
+            </button>
+
+            <hr style="border:none; border-top:1px solid var(--border-color); margin:10px 0;">
+
+            <span class="inspector-card-title">Export Selected Versions (Cut EDL / CSV)</span>
+            <p style="font-size:12px; color:var(--text-muted);">
+              Choose <strong>"What's New"</strong> (only shots whose selected version or Source-In slip differs from the Resolve cut) or <strong>"Everything"</strong> (all 117 shots):
+            </p>
+            <button class="btn btn-primary" id="btnExportWhatsNewEDL" style="background:#059669;">
+              ⚡ Export "What's New" EDL — Diff Only (.edl)
+            </button>
+            <button class="btn btn-primary" id="btnExportCutEDL" style="margin-top:6px;">
+              🎬 Export "Everything" EDL — Full Cut (.edl)
+            </button>
+            <div style="display:flex; gap:6px; margin-top:6px;">
+              <button class="btn" id="btnExportWhatsNewCSV" style="flex:1; border-color:#059669; color:#6ee7b7;">
+                ⚡ "What's New" CSV (.csv)
+              </button>
+              <button class="btn" id="btnExportCutCSV" style="flex:1;">
+                📊 "Everything" CSV (.csv)
+              </button>
+            </div>
+
+            <hr style="border:none; border-top:1px solid var(--border-color); margin:10px 0;">
+
+            <span class="inspector-card-title" style="font-size:13px;">Export Timeline Notes & Markers</span>
+            <button class="btn" id="btnExportCSV" style="margin-top:4px;">
+              📥 Export Resolve Marker CSV (.csv)
+            </button>
+            <p style="font-size:11px; color:var(--text-dim);">
+              In DaVinci Resolve: Right-click Timeline → Timelines → Import → Timeline Markers from CSV...
+            </p>
+
+            <button class="btn" id="btnExportEDL" style="margin-top:6px;">
+              📄 Export Marker EDL (.edl)
+            </button>
+
+            <hr style="border:none; border-top:1px solid var(--border-color); margin:8px 0;">
+
+            <button class="btn" id="btnExportJSON">
+              💾 Save Review Snapshot (.json)
+            </button>
+
+            <button class="btn" id="btnImportJSON">
+              📂 Load Review Snapshot (.json)
+            </button>
+            <input type="file" id="fileInputJSON" accept=".json" style="display:none;">
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Cut Manifest Data -->
+  <script src="manifest.js?v=20261114e"></script>
+  <!-- Application Logic -->
+  <script src="app.js?v=20261114e"></script>
+</body>
+</html>

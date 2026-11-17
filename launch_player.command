@@ -1,0 +1,10 @@
+#!/bin/bash
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+cd "$DIR/.."
+echo "========================================================"
+echo "  ShotSwap Timeline Review & Version Player"
+echo "========================================================"
+echo ""
+echo "Starting local video server on http://localhost:8080/review/"
+open "http://localhost:8080/review/"
+python3 -m http.server 8080 || python -m http.server 8080 || open "$DIR/index.html"

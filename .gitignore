@@ -1,0 +1,32 @@
+# Media & Proxies
+.web_proxies/
+*.mp4
+*.mov
+*.m4v
+*.avi
+*.mkv
+*.exr
+*.dpx
+*.tif
+*.tiff
+
+# Production-specific generated cut data
+cut_manifest.json
+manifest.js
+shotswap_config.json
+.cut_manifest_*.tmp
+.manifest_*.tmp
+.unreadable_movs.json
+
+# Exports & backups
+exports/
+backups/
+
+# Python cache & OS files
+__pycache__/
+*.py[cod]
+*$py.class
+.DS_Store
+Thumbs.db
+*.swp
+*~

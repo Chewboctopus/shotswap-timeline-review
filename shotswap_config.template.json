@@ -1,0 +1,69 @@
+{
+  "production": {
+    "name": "MY_PRODUCTION",
+    "prefix": "SH",
+    "display_title": "ShotSwap Timeline Review"
+  },
+  "filesystem": {
+    "media_root": "..",
+    "directory_structure": "sequence_nested",
+    "subfolders": [
+      "Comp",
+      "AI_Gen/Video",
+      "AI_Gen/Stills",
+      "UpRes",
+      "Renders"
+    ]
+  },
+  "resolve": {
+    "search_roots": [
+      "%APPDATA%\\Blackmagic Design\\DaVinci Resolve\\Support\\Resolve Disk Database\\Resolve Projects\\Users\\guest\\Projects",
+      "%PROGRAMDATA%\\Blackmagic Design\\DaVinci Resolve\\Support\\Resolve Disk Database\\Resolve Projects\\Users\\guest\\Projects",
+      "F:\\RESOLVE PROJECT\\RESOLVE 19\\Resolve Project Library\\Resolve Projects\\Users\\guest\\Projects",
+      "F:\\RESOLVE PROJECT\\Resolve Project Library\\Resolve Projects\\Users\\guest\\Projects"
+    ],
+    "default_project_db": "",
+    "timeline_name_pattern": ".*",
+    "base_cut_track": 4,
+    "override_tracks": [
+      5,
+      6,
+      7
+    ]
+  },
+  "file_search": {
+    "shot_code_regex": "([A-Za-z0-9]+_\\d{3}_\\d{3})",
+    "video_extensions": [
+      ".mov",
+      ".mp4"
+    ],
+    "still_extensions": [
+      ".jpg",
+      ".jpeg",
+      ".png"
+    ],
+    "version_regex": "(_v\\d+)",
+    "kind_keywords": {
+      "CMP": "CMP",
+      "COMP": "COMP",
+      "VID": "VID",
+      "UPRES": "UPRES",
+      "GEN": "GEN"
+    },
+    "ignore_patterns": [
+      "_TO_DELETE",
+      "_backup",
+      ".web_proxies",
+      ".tmp"
+    ]
+  },
+  "proxies": {
+    "proxy_dir": ".web_proxies",
+    "transcode_mode": "h264_nvenc",
+    "resolution": "1920:1080",
+    "crf_cq": 23
+  },
+  "backup": {
+    "backup_root": "backups"
+  }
+}
